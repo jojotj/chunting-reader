@@ -1,0 +1,39 @@
+# ===== 本地配置与签名（含密码，绝不入库）=====
+local.properties
+*.jks
+*.keystore
+keystore.properties
+
+# ===== Android 构建产物 =====
+build/
+.gradle/
+out/
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+
+# ===== 工具链（体积巨大，随本机下载）=====
+sdk/
+gradle.zip
+gradle-*/
+
+# ===== Kotlin 会话目录 =====
+.kotlin/
+
+# ===== IDE =====
+.idea/
+*.iml
+*.ipr
+*.iws
+.DS_Store
+
+# ===== 日志与临时文件 =====
+*.log
+*.hprof
+*.tmp
+temp/
+
+# ===== 设计过程稿（不入库）=====
+docs/design/

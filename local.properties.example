@@ -1,0 +1,8 @@
+## 复制本文件为 local.properties 并填写本机路径（该文件不入库）
+sdk.dir=C:/path/to/Android/sdk
+
+## 以下四项仅在需要产出已签名 release 包时填写
+RELEASE_STORE_FILE=C:/path/to/your.keystore
+RELEASE_STORE_PASSWORD=
+RELEASE_KEY_ALIAS=
+RELEASE_KEY_PASSWORD=
