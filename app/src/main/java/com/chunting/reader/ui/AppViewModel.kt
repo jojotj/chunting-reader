@@ -221,7 +221,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val tracks = FsBrowser.scanRecursive(getApplication(), folder.path)
             _currentTracks.value = tracks
-            db.shelfDao().touch(folder.path, System.currentTimeMillis())
+            // 注意：这里不再 touch 更新时间戳。只浏览（点开书单）不改变书架排序，
+            // 只有真正点了播放才会置顶，见 markPlayed()。
             // 该文件夹（含子目录）里最后一次播放位置：用于「继续上次」提示
             val base = folder.path.trimEnd('/')
             val last = withContext(Dispatchers.IO) {
@@ -426,7 +427,18 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val start = startPositionMs ?: progressMap[t.path]?.let {
             if (isResumable(it.positionMs, it.durationMs)) it.positionMs else 0L
         } ?: 0L
+        markPlayed(folder)
         PlayerController.playList(tracks, index, speed, start)
+    }
+
+    /** 真正开始播放时才把该文件夹排到书架最前（仅浏览 book 不排序）。 */
+    private fun markPlayed(folder: String?) {
+        val p = folder?.takeIf { it.isNotEmpty() } ?: return
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                runCatching { db.shelfDao().touch(p, System.currentTimeMillis()) }
+            }
+        }
     }
 
     /** 播放条右侧按钮：有队列就切播放/暂停，冷启动恢复态则先建队列续播 */

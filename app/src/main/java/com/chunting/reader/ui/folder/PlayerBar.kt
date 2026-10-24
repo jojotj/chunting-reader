@@ -65,13 +65,13 @@ fun speedLabel(v: Float): String {
     return if (i % 100 == 0) "%.1f×".format(i / 100f) else "%.2f×".format(v).trimEnd('0').trimEnd('.')
 }
 
-private fun rewindIcon(skip: Int): ImageVector = when (skip) {
+internal fun rewindIcon(skip: Int): ImageVector = when (skip) {
     10 -> Icons.Filled.Replay10
     30 -> Icons.Filled.Replay30
     else -> Icons.Filled.FastRewind
 }
 
-private fun forwardIcon(skip: Int): ImageVector = when (skip) {
+internal fun forwardIcon(skip: Int): ImageVector = when (skip) {
     10 -> Icons.Filled.Forward10
     30 -> Icons.Filled.Forward30
     else -> Icons.Filled.FastForward
@@ -248,7 +248,7 @@ fun PlayerBar(
  * 极简进度条：3dp 细轨 + 9dp 圆点，无多余阴影/描边。
  */
 @Composable
-private fun SeekBar(
+internal fun SeekBar(
     fraction: Float,
     accent: Color,
     trackColor: Color,

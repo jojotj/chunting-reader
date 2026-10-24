@@ -1,4 +1,4 @@
-import java.util.Properties
+﻿import java.util.Properties
 
 plugins {
     id("com.android.application")
@@ -21,14 +21,14 @@ android {
 
     defaultConfig {
         applicationId = "com.chunting.reader"
-        // 26 = Android 8.0，覆盖绝大多数在用设备；前台播放通知需要该版本起的能力
-        minSdk = 26
+        // 23 = Android 6.0：兼顾老车机等低版本设备
+        minSdk = 23
         targetSdk = 36
-        versionCode = 14
-        versionName = "1.7.7"
+        versionCode = 20
+        versionName = "2.0.5"
 
         // 只保留 arm64 原生库：现代手机基本均为 arm64，可省掉 ExoPlayer 的另一套 so
-        ndk { abiFilters += listOf("arm64-v8a") }
+        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }
 
     signingConfigs {
@@ -103,3 +103,6 @@ dependencies {
     // 协程
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 }
+
+
+

@@ -6,6 +6,7 @@ import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -51,8 +52,25 @@ import com.chunting.reader.ui.common.GeneratedCover
 import com.chunting.reader.ui.theme.LocalAppColors
 import com.chunting.reader.util.formatTime
 
+/**
+ * 竖屏走底部播放条布局；横屏（车机 / 平板 / 手机横放）走「唱片转盘 + 右侧列表」布局。
+ * 用实际测量到的宽高判断，旋转屏幕或改变窗口大小时自动切换。
+ */
 @Composable
 fun FolderScreen(vm: AppViewModel, onBack: () -> Unit) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        if (maxWidth > maxHeight) {
+            com.chunting.reader.ui.common.LandscapeCanvas {
+                FolderScreenLandscape(vm = vm, onBack = onBack)
+            }
+        } else {
+            FolderScreenPortrait(vm = vm, onBack = onBack)
+        }
+    }
+}
+
+@Composable
+private fun FolderScreenPortrait(vm: AppViewModel, onBack: () -> Unit) {
     val c = LocalAppColors.current
     val folder by vm.currentFolder.collectAsState()
     val tracks by vm.currentTracks.collectAsState()
@@ -216,7 +234,7 @@ fun FolderScreen(vm: AppViewModel, onBack: () -> Unit) {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun TrackRow(
+internal fun TrackRow(
     index: Int,
     track: AudioTrack,
     isCurrent: Boolean,

@@ -6,6 +6,7 @@ import android.os.Build
 import android.os.Environment
 import android.provider.Settings
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -22,10 +24,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material3.Checkbox
@@ -50,16 +54,39 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.chunting.reader.data.repo.DirNode
 import com.chunting.reader.ui.AppViewModel
+import com.chunting.reader.ui.common.AppRail
 import com.chunting.reader.ui.common.GeneratedCover
 import com.chunting.reader.ui.theme.LocalAppColors
+import com.chunting.reader.ui.theme.ShelfLayout
+import com.chunting.reader.ui.theme.ThemeMode
+import com.chunting.reader.util.formatTime
 
 /**
  * 目录浏览器：像文件管理器一样逐级进入手机目录，左侧复选框多选文件夹后批量加入书架。
  * 目录列表直接读文件系统（内部存储 / 存储卡 / 任意子目录），不依赖媒体库索引；
  * 每个目录的「音频数量」由后台限深探测异步补全，先从 0 变「统计中」，再变实际值。
  */
+/**
+ * 选文件夹页：竖屏沿用原来的单栏目录浏览器；横屏（车机 / 平板）走设计稿 v6 的
+ * 「导航栏 + 左 36% 位置树 / 右 64% 目录列表 + 底部添加条」布局。
+ */
 @Composable
 fun PickerScreen(vm: AppViewModel, onBack: () -> Unit) {
+    androidx.compose.foundation.layout.BoxWithConstraints(
+        androidx.compose.ui.Modifier.fillMaxSize()
+    ) {
+        if (maxWidth > maxHeight) {
+            com.chunting.reader.ui.common.LandscapeCanvas {
+                PickerScreenLandscape(vm = vm, onBack = onBack)
+            }
+        } else {
+            PickerScreenPortrait(vm = vm, onBack = onBack)
+        }
+    }
+}
+
+@Composable
+private fun PickerScreenPortrait(vm: AppViewModel, onBack: () -> Unit) {
     val c = LocalAppColors.current
     val entries by vm.browseEntries.collectAsState()
     val crumbs by vm.breadcrumb.collectAsState()
@@ -358,6 +385,363 @@ private fun DirRow(
             Icon(
                 Icons.Filled.KeyboardArrowRight, "进入",
                 tint = c.sub, modifier = Modifier.size(18.dp)
+            )
+        }
+    }
+}
+
+
+/* ======================= 横屏：位置树 + 目录列表 ======================= */
+
+@Composable
+private fun PickerScreenLandscape(vm: AppViewModel, onBack: () -> Unit) {
+    val c = LocalAppColors.current
+    val entries by vm.browseEntries.collectAsState()
+    val crumbs by vm.breadcrumb.collectAsState()
+    val checked by vm.checkedDirs.collectAsState()
+    val loading by vm.pickerLoading.collectAsState()
+    val adding by vm.addingFolders.collectAsState()
+    val shelf by vm.shelf.collectAsState()
+    val settings by vm.settingsFlow.collectAsState()
+    val curNode = crumbs.lastOrNull()
+    val inShelf = shelf.map { it.path.trimEnd('/') }.toSet()
+
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    var needAllFiles by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        needAllFiles = Build.VERSION.SDK_INT >= 30 && !Environment.isExternalStorageManager()
+    }
+    val onFg = if (c.isDark) Color(0xFF141008) else Color(0xFFFAF8F4)
+
+    Row(Modifier.fillMaxSize().background(c.bg)) {
+        AppRail(
+            layout = settings.layout,
+            themeMode = settings.themeMode,
+            onShelf = onBack,
+            onAddFolder = {},
+            onToggleLayout = {
+                vm.setLayout(
+                    if (settings.layout == ShelfLayout.GRID) ShelfLayout.LIST else ShelfLayout.GRID
+                )
+            },
+            onToggleTheme = {
+                vm.setTheme(
+                    when (settings.themeMode) {
+                        ThemeMode.SYSTEM -> ThemeMode.LIGHT
+                        ThemeMode.LIGHT -> ThemeMode.DARK
+                        ThemeMode.DARK -> ThemeMode.SYSTEM
+                    }
+                )
+            },
+            onSettings = {},
+        )
+
+        Column(Modifier.weight(1f).fillMaxHeight()) {
+            /* 顶部：标题 + 取消 / 添加 */
+            Row(
+                Modifier.fillMaxWidth().height(64.dp).padding(start = 22.dp, end = 20.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "添加文件夹", color = c.text, fontSize = 16.sp, fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        if (checked.isEmpty()) "逐级进入手机目录，可多层勾选"
+                        else "已选 ${checked.size} 个文件夹",
+                        color = if (checked.isEmpty()) c.sub else c.accent,
+                        fontSize = 10.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 3.dp)
+                    )
+                }
+                Box(
+                    Modifier.clip(RoundedCornerShape(10.dp)).background(c.line)
+                        .clickable { onBack() }.padding(horizontal = 18.dp, vertical = 10.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text("取消", color = c.text, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold)
+                }
+                Spacer(Modifier.width(10.dp))
+                Box(
+                    Modifier.clip(RoundedCornerShape(10.dp))
+                        .background(if (checked.isEmpty() || adding) c.line else c.accent)
+                        .clickable(enabled = checked.isNotEmpty() && !adding) { vm.addCheckedToShelf() }
+                        .padding(horizontal = 20.dp, vertical = 10.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (adding) {
+                        CircularProgressIndicator(
+                            color = c.accent, strokeWidth = 2.dp, modifier = Modifier.size(15.dp)
+                        )
+                    } else {
+                        Text(
+                            "添加" + if (checked.isEmpty()) "" else " (${checked.size})",
+                            color = if (checked.isEmpty()) c.sub else onFg,
+                            fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+            Box(Modifier.fillMaxWidth().height(1.dp).background(c.line))
+
+            if (needAllFiles) {
+                Row(
+                    Modifier.fillMaxWidth()
+                        .clickable {
+                            runCatching {
+                                ctx.startActivity(
+                                    Intent(
+                                        Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                                        Uri.parse("package:${ctx.packageName}")
+                                    )
+                                )
+                            }
+                        }
+                        .padding(start = 22.dp, end = 20.dp, top = 8.dp, bottom = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        "目录列表不全？点此开启「所有文件访问」",
+                        color = c.accent, fontSize = 11.sp, modifier = Modifier.weight(1f)
+                    )
+                    Icon(
+                        Icons.Filled.KeyboardArrowRight, null,
+                        tint = c.accent, modifier = Modifier.size(16.dp)
+                    )
+                }
+                Box(Modifier.fillMaxWidth().height(1.dp).background(c.line))
+            }
+
+            Row(Modifier.weight(1f).fillMaxWidth()) {
+                /* 左 36%：位置树（当前路径逐级展开） */
+                Column(Modifier.weight(0.36f).fillMaxHeight()) {
+                    Text(
+                        "位置", color = c.sub, fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 1.5.sp,
+                        modifier = Modifier.padding(start = 22.dp, top = 16.dp, bottom = 6.dp)
+                    )
+                    LazyColumn(
+                        contentPadding = PaddingValues(start = 12.dp, end = 16.dp, bottom = 14.dp)
+                    ) {
+                        item(key = "__root__") {
+                            TreeRowLandscape(
+                                name = "内部存储", depth = 0, active = crumbs.isEmpty()
+                            ) { vm.browseInto(null) }
+                        }
+                        itemsIndexed(crumbs, key = { _, n -> n.path }) { idx, n ->
+                            TreeRowLandscape(
+                                name = n.name, depth = idx + 1, active = idx == crumbs.lastIndex
+                            ) { vm.browseInto(n.path) }
+                        }
+                    }
+                }
+                Box(Modifier.fillMaxHeight().width(1.dp).background(c.line))
+
+                /* 右 64%：面包屑 + 目录行 */
+                Column(Modifier.weight(0.64f).fillMaxHeight()) {
+                    Row(
+                        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
+                            .padding(start = 18.dp, end = 18.dp, top = 12.dp, bottom = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        CrumbChip("存储位置", crumbs.isEmpty()) { vm.browseInto(null) }
+                        crumbs.forEachIndexed { idx, n ->
+                            Text(
+                                "›", color = c.sub, fontSize = 11.sp,
+                                modifier = Modifier.padding(horizontal = 4.dp)
+                            )
+                            CrumbChip(n.name, idx == crumbs.lastIndex) { vm.browseInto(n.path) }
+                        }
+                    }
+                    Box(Modifier.fillMaxWidth().height(1.dp).background(c.line))
+
+                    if (loading) {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(color = c.accent)
+                        }
+                    } else {
+                        LazyColumn(
+                            contentPadding = PaddingValues(start = 14.dp, end = 18.dp, top = 8.dp, bottom = 12.dp)
+                        ) {
+                            if (curNode != null) {
+                                item(key = "__current__") {
+                                    PickerRowLandscape(
+                                        node = curNode,
+                                        checked = curNode.path.trimEnd('/') in checked,
+                                        inShelf = curNode.path.trimEnd('/') in inShelf,
+                                        label = "当前文件夹",
+                                        onClick = {},
+                                        onCheck = { vm.toggleChecked(curNode.path) },
+                                    )
+                                }
+                            }
+                            if (entries.isEmpty()) {
+                                item(key = "__nochild__") {
+                                    Box(Modifier.fillMaxWidth().padding(vertical = 14.dp)) {
+                                        Text(
+                                            "这个目录下没有子文件夹；若音频就在当前目录，勾选上方「当前文件夹」即可",
+                                            color = c.sub, fontSize = 11.sp
+                                        )
+                                    }
+                                }
+                            }
+                            items(entries, key = { it.path }) { node ->
+                                PickerRowLandscape(
+                                    node = node,
+                                    checked = node.path.trimEnd('/') in checked,
+                                    inShelf = node.path.trimEnd('/') in inShelf,
+                                    label = null,
+                                    onClick = { vm.browseInto(node.path) },
+                                    onCheck = { vm.toggleChecked(node.path) },
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            /* 底部：选择摘要 + 添加 */
+            Row(
+                Modifier.fillMaxWidth().height(62.dp).background(c.line.copy(alpha = 0.55f))
+                    .padding(start = 22.dp, end = 20.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        if (checked.isEmpty()) "尚未选择" else "已勾选 ${checked.size} 个文件夹",
+                        color = if (checked.isEmpty()) c.sub else c.text,
+                        fontSize = 12.sp, fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        if (checked.isEmpty()) "勾选方框可多选，每个文件夹会添加为一本书"
+                        else "点右侧按钮加入书架",
+                        color = c.sub, fontSize = 9.5.sp
+                    )
+                }
+                Text("单个音频不单独导入", color = c.sub, fontSize = 10.sp)
+                Spacer(Modifier.width(14.dp))
+                Box(
+                    Modifier.clip(RoundedCornerShape(10.dp))
+                        .background(if (checked.isEmpty() || adding) c.line else c.accent)
+                        .clickable(enabled = checked.isNotEmpty() && !adding) { vm.addCheckedToShelf() }
+                        .padding(horizontal = 20.dp, vertical = 11.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        "添加到书架",
+                        color = if (checked.isEmpty()) c.sub else onFg,
+                        fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TreeRowLandscape(name: String, depth: Int, active: Boolean, onClick: () -> Unit) {
+    val c = LocalAppColors.current
+    Row(
+        Modifier.fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(if (active) c.accent.copy(alpha = 0.12f) else Color.Transparent)
+            .clickable { onClick() }
+            .padding(start = (10 + depth * 14).dp, end = 10.dp, top = 9.dp, bottom = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            Icons.Filled.Folder, null,
+            tint = if (active) c.accent else c.sub, modifier = Modifier.size(16.dp)
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            name,
+            color = if (active) c.accent else c.text,
+            fontSize = 12.sp,
+            fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+            maxLines = 1, overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun PickerRowLandscape(
+    node: DirNode,
+    checked: Boolean,
+    inShelf: Boolean,
+    label: String?,
+    onClick: () -> Unit,
+    onCheck: () -> Unit,
+) {
+    val c = LocalAppColors.current
+    val onFg = if (c.isDark) Color(0xFF141008) else Color(0xFFFAF8F4)
+    Row(
+        Modifier.fillMaxWidth().height(54.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(if (checked) c.accent.copy(alpha = 0.10f) else Color.Transparent)
+            .clickable { onClick() }
+            .padding(horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier.size(19.dp).clip(RoundedCornerShape(5.dp))
+                .background(if (checked) c.accent else Color.Transparent)
+                .border(
+                    1.5.dp,
+                    if (checked) c.accent else if (inShelf) c.line else c.sub,
+                    RoundedCornerShape(5.dp)
+                )
+                .clickable(enabled = !inShelf) { onCheck() },
+            contentAlignment = Alignment.Center,
+        ) {
+            if (checked) Icon(
+                Icons.Filled.Check, "已选", tint = onFg, modifier = Modifier.size(13.dp)
+            )
+        }
+        Spacer(Modifier.width(10.dp))
+        Icon(
+            Icons.Filled.Folder, null,
+            tint = if (inShelf) c.sub else c.accent, modifier = Modifier.size(19.dp)
+        )
+        Spacer(Modifier.width(9.dp))
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    node.name,
+                    color = if (inShelf) c.sub else c.text,
+                    fontSize = 12.5.sp, fontWeight = FontWeight.Medium,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+                if (label != null) {
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        label, color = c.accent, fontSize = 8.5.sp,
+                        modifier = Modifier.clip(RoundedCornerShape(6.dp))
+                            .background(c.accent.copy(alpha = 0.14f))
+                            .padding(horizontal = 5.dp, vertical = 1.dp)
+                    )
+                }
+                if (inShelf) {
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        "已在书架", color = c.sub, fontSize = 8.5.sp,
+                        modifier = Modifier.clip(RoundedCornerShape(6.dp))
+                            .background(c.line)
+                            .padding(horizontal = 5.dp, vertical = 1.dp)
+                    )
+                }
+            }
+            Text(
+                if (node.deepCount > 0) "${node.deepCount} 个音频 · 独立成书" else "文件夹 · 点进去继续选",
+                color = c.sub, fontSize = 9.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 2.dp)
+            )
+        }
+        Spacer(Modifier.width(10.dp))
+        if (node.deepCount > 0) {
+            Text(
+                formatTime(node.deepDurationMs), color = c.sub, fontSize = 10.sp, maxLines = 1
             )
         }
     }

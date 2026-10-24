@@ -55,6 +55,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
@@ -73,9 +74,46 @@ import com.chunting.reader.ui.theme.ShelfLayout
 import com.chunting.reader.ui.theme.ThemeMode
 import com.chunting.reader.util.formatDuration
 
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * 书架：竖屏沿用原来的三列网格 + 底部播放条；横屏（车机 / 平板 / 手机横放）
+ * 切换为设计稿 v6 的「96dp 导航栏 + 左 36% / 右 64%」布局。
+ */
 @Composable
 fun ShelfScreen(
+    vm: AppViewModel,
+    onOpenFolder: () -> Unit,
+    onAdd: () -> Unit,
+    onSettings: () -> Unit,
+    onOpenCurrentFolder: () -> Unit,
+) {
+    androidx.compose.foundation.layout.BoxWithConstraints(
+        androidx.compose.ui.Modifier.fillMaxSize()
+    ) {
+        if (maxWidth > maxHeight) {
+            com.chunting.reader.ui.common.LandscapeCanvas {
+                ShelfScreenLandscape(
+                    vm = vm,
+                    onOpenFolder = onOpenFolder,
+                    onAdd = onAdd,
+                    onSettings = onSettings,
+                    onOpenCurrentFolder = onOpenCurrentFolder,
+                )
+            }
+        } else {
+            ShelfScreenPortrait(
+                vm = vm,
+                onOpenFolder = onOpenFolder,
+                onAdd = onAdd,
+                onSettings = onSettings,
+                onOpenCurrentFolder = onOpenCurrentFolder,
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ShelfScreenPortrait(
     vm: AppViewModel,
     onOpenFolder: () -> Unit,
     onAdd: () -> Unit,
@@ -137,8 +175,8 @@ fun ShelfScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        if (settings.layout == ShelfLayout.GRID) Icons.AutoMirrored.Filled.ViewList
-                        else Icons.Filled.GridView,
+                        if (settings.layout == ShelfLayout.GRID) Icons.Filled.GridView
+                        else Icons.AutoMirrored.Filled.ViewList,
                         contentDescription = "切换排列",
                         tint = c.sub, modifier = Modifier.size(16.dp)
                     )
@@ -361,11 +399,19 @@ private fun ShelfGrid(
     bottomPad: androidx.compose.ui.unit.Dp = 100.dp,
 ) {
     val c = LocalAppColors.current
+    // 横屏 / 大屏（车机、平板）按宽度自适应列数，竖屏手机仍是 3 列
+    val cfg = LocalConfiguration.current
+    val cols = when {
+        cfg.screenWidthDp >= 1000 -> 6
+        cfg.screenWidthDp >= 760 -> 5
+        cfg.screenWidthDp >= 600 -> 4
+        else -> 3
+    }
     LazyVerticalGrid(
-        columns = GridCells.Fixed(3),
-        contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 14.dp, bottom = bottomPad),
-        horizontalArrangement = Arrangement.spacedBy(11.dp),
-        verticalArrangement = Arrangement.spacedBy(11.dp),
+        columns = GridCells.Fixed(cols),
+        contentPadding = PaddingValues(start = 22.dp, end = 22.dp, top = 14.dp, bottom = bottomPad),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
         items(folders, key = { it.path }) { f ->
             Box(Modifier.fillMaxWidth().combinedClickable(
@@ -374,12 +420,13 @@ private fun ShelfGrid(
                 },
                 onLongClick = { onLongPress(f) },
             )) {
-            Column {
-                Box {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                // v6 竖屏 s6：封面取单元格宽的 59%、2:3 比例，比老版整行铺满瘦一号
+                Box(Modifier.fillMaxWidth(0.59f).aspectRatio(2f / 3f)) {
                     GeneratedCover(
                         folderName = f.name,
-                        modifier = Modifier.fillMaxWidth().aspectRatio(3f / 3.4f),
-                        fontSize = 32,
+                        modifier = Modifier.fillMaxSize(),
+                        fontSize = 20,
                     )
                     if (f.progress > 0f) {
                         LinearProgressIndicator(
@@ -406,15 +453,16 @@ private fun ShelfGrid(
                 }
                 Text(
                     f.name,
-                    color = c.text, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold,
-                    maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 16.sp,
-                    minLines = 2,
-                    modifier = Modifier.padding(top = 7.dp)
+                    color = c.text, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
+                    maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 14.sp,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(top = 7.dp)
                 )
                 Text(
                     "${f.trackCount} 讲 · ${(f.progress * 100).toInt()}%",
-                    color = c.sub, fontSize = 9.5.sp, maxLines = 1,
-                    modifier = Modifier.padding(top = 2.dp)
+                    color = c.sub, fontSize = 9.sp, maxLines = 1,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(top = 3.dp)
                 )
             }
             }
