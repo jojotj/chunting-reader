@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -69,11 +70,33 @@ fun rememberCoverReplaceLauncher(): (folderPath: String) -> Unit {
 }
 
 /**
- * 「封面替换」按钮：与主题同色系的小胶囊。
- * 只选中 1 本时可点（描边强调色 + 强调色文字），选中多本时整颗压暗且不可点。
+ * 「封面还原」：选中几本就还几本，不区分有没有换过封面（没换的删不掉，直接跳过）。
+ * 返回的函数参数是 folderPath 列表，点按钮时再传，避免闭包抓错当前选中项。
  */
 @Composable
-fun CoverReplacePill(
+fun rememberCoverResetAction(): (folderPaths: List<String>) -> Unit {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    return { paths ->
+        if (paths.isNotEmpty()) {
+            scope.launch {
+                val removed = withContext(Dispatchers.IO) { CoverStore.reset(ctx, paths) }
+                Toast.makeText(
+                    ctx,
+                    if (removed > 0) "已还原 $removed 本封面" else "这些已经是原始封面",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+    }
+}
+
+/** 操作条上的小胶囊：描边 + 居中图标文字，禁用时整颗压暗 */
+@Composable
+private fun CoverPill(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    text: String,
     enabled: Boolean,
     accent: Color,
     line: Color,
@@ -93,17 +116,66 @@ fun CoverReplacePill(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
-            Icons.Filled.PhotoCamera,
+            icon,
             contentDescription = null,
             tint = tint,
             modifier = Modifier.size(13.dp)
         )
         Spacer(Modifier.width(5.dp))
         Text(
-            "封面替换",
+            text,
             color = tint,
             fontSize = 11.5.sp,
             fontWeight = FontWeight.SemiBold
         )
     }
+}
+
+/**
+ * 「封面替换」按钮：与主题同色系的小胶囊。
+ * 只选中 1 本时可点（描边强调色 + 强调色文字），选中多本时整颗压暗且不可点。
+ */
+@Composable
+fun CoverReplacePill(
+    enabled: Boolean,
+    accent: Color,
+    line: Color,
+    subColor: Color,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    CoverPill(
+        icon = Icons.Filled.PhotoCamera,
+        text = "封面替换",
+        enabled = enabled,
+        accent = accent,
+        line = line,
+        subColor = subColor,
+        modifier = modifier,
+        onClick = onClick
+    )
+}
+
+/**
+ * 「封面还原」按钮：只要选中了书就能点（可多选），还原回 App 原来的生成式封面。
+ */
+@Composable
+fun CoverResetPill(
+    enabled: Boolean,
+    accent: Color,
+    line: Color,
+    subColor: Color,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    CoverPill(
+        icon = Icons.Filled.Restore,
+        text = "封面还原",
+        enabled = enabled,
+        accent = accent,
+        line = line,
+        subColor = subColor,
+        modifier = modifier,
+        onClick = onClick
+    )
 }

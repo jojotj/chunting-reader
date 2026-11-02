@@ -24,8 +24,8 @@ android {
         // 23 = Android 6.0：兼顾老车机等低版本设备
         minSdk = 23
         targetSdk = 36
-        versionCode = 21
-        versionName = "2.0.6"
+        versionCode = 22
+        versionName = "2.0.7"
 
         // 只保留 arm64 原生库：现代手机基本均为 arm64，可省掉 ExoPlayer 的另一套 so
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }

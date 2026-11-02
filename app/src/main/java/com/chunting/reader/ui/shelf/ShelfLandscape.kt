@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -59,9 +60,11 @@ import com.chunting.reader.ui.AppViewModel
 import com.chunting.reader.ui.common.AppRail
 import com.chunting.reader.ui.common.DotLine
 import com.chunting.reader.ui.common.CoverReplacePill
+import com.chunting.reader.ui.common.CoverResetPill
 import com.chunting.reader.ui.common.FolderCover
 import com.chunting.reader.ui.common.GeneratedCover
 import com.chunting.reader.ui.common.rememberCoverReplaceLauncher
+import com.chunting.reader.ui.common.rememberCoverResetAction
 import com.chunting.reader.ui.folder.TrackRow
 import com.chunting.reader.ui.theme.LocalAppColors
 import com.chunting.reader.ui.theme.ShelfLayout
@@ -227,7 +230,7 @@ fun ShelfScreenLandscape(
                     Row(
                         Modifier.align(Alignment.BottomEnd)
                             .padding(end = 40.dp, bottom = 16.dp)
-                            .width(resumeWidth)
+                            .widthIn(max = resumeWidth)
                             .height(64.dp)
                             .clip(RoundedCornerShape(16.dp))
                             .background(c.card)
@@ -249,11 +252,20 @@ fun ShelfScreenLandscape(
                                 color = c.text, fontSize = 12.sp, fontWeight = FontWeight.SemiBold
                             )
                         }
-                        Spacer(Modifier.weight(1f))
+                        Spacer(Modifier.width(14.dp))
                         Text("${selected.size}/${folders.size}", color = c.sub, fontSize = 10.sp)
-                        Spacer(Modifier.weight(1f))
-                        // 封面替换：单选才亮，多选置灰（位置在全选与删除之间）
+                        Spacer(Modifier.width(14.dp))
+                        // 封面还原：选中即亮（可多选一起还原）／封面替换：单选才亮
                         val pickCover = rememberCoverReplaceLauncher()
+                        val resetCovers = rememberCoverResetAction()
+                        CoverResetPill(
+                            enabled = selected.isNotEmpty(),
+                            accent = c.accent,
+                            line = c.line,
+                            subColor = c.sub,
+                            onClick = { resetCovers(selected.toList()) }
+                        )
+                        Spacer(Modifier.width(8.dp))
                         CoverReplacePill(
                             enabled = selected.size == 1,
                             accent = c.accent,

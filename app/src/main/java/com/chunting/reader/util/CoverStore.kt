@@ -121,6 +121,21 @@ object CoverStore {
         return runCatching { fileOf(ctx, folderPath).delete() }.getOrDefault(false)
     }
 
+    /**
+     * 批量还原：把多本文件夹的自定义封面一起删掉，回落到原来的生成式封面。
+     * 没换过封面的文件夹只是删不掉，不影响其它本；真的删掉了才递增版本，避免无谓重组。
+     */
+    fun reset(ctx: Context, folderPaths: Collection<String>): Int {
+        var removed = 0
+        folderPaths.forEach { p ->
+            if (p.isEmpty()) return@forEach
+            synchronized(cache) { cache.remove(key(p)) }
+            if (runCatching { fileOf(ctx, p).delete() }.getOrDefault(false)) removed++
+        }
+        if (removed > 0) _version.value = _version.value + 1
+        return removed
+    }
+
     /* ---------------- 内部工具 ---------------- */
 
     private fun readRotationDegrees(file: File): Int = runCatching {

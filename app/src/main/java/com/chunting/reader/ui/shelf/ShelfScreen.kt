@@ -69,9 +69,11 @@ import androidx.compose.ui.unit.sp
 import com.chunting.reader.data.model.ShelfFolder
 import com.chunting.reader.ui.AppViewModel
 import com.chunting.reader.ui.common.CoverReplacePill
+import com.chunting.reader.ui.common.CoverResetPill
 import com.chunting.reader.ui.common.FolderCover
 import com.chunting.reader.ui.common.GeneratedCover
 import com.chunting.reader.ui.common.rememberCoverReplaceLauncher
+import com.chunting.reader.ui.common.rememberCoverResetAction
 import com.chunting.reader.ui.theme.LocalAppColors
 import com.chunting.reader.ui.theme.ShelfLayout
 import com.chunting.reader.ui.theme.ThemeMode
@@ -222,8 +224,18 @@ private fun ShelfScreenPortrait(
                 }
                 }
                 if (selecting) {
+                    // 封面还原：选中即亮，可多本一起还原
                     // 封面替换：只有单选时可用，多选一律灰掉
                     val pickCover = rememberCoverReplaceLauncher()
+                    val resetCovers = rememberCoverResetAction()
+                    CoverResetPill(
+                        enabled = selected.isNotEmpty(),
+                        accent = c.accent,
+                        line = c.line,
+                        subColor = c.sub,
+                        onClick = { resetCovers(selected.toList()) }
+                    )
+                    Spacer(Modifier.width(8.dp))
                     CoverReplacePill(
                         enabled = selected.size == 1,
                         accent = c.accent,
@@ -231,19 +243,6 @@ private fun ShelfScreenPortrait(
                         subColor = c.sub,
                         onClick = { selected.firstOrNull()?.let(pickCover) }
                     )
-                    Spacer(Modifier.width(8.dp))
-                    Box(
-                        Modifier.clip(RoundedCornerShape(9.dp)).background(c.accent)
-                            .clickable { selecting = false; selected = emptySet() }
-                            .padding(horizontal = 14.dp, vertical = 7.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            "完成",
-                            color = if (c.isDark) Color(0xFF141008) else Color(0xFFFAF8F4),
-                            fontSize = 12.sp, fontWeight = FontWeight.SemiBold
-                        )
-                    }
                 }
             }
 
@@ -357,6 +356,20 @@ private fun ShelfScreenPortrait(
                     Text(
                         "删除",
                         color = if (selected.isEmpty()) c.sub else Color.White,
+                        fontSize = 12.sp, fontWeight = FontWeight.SemiBold
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
+                // 完成从右上角挪到这里，占原来删除的位置
+                Box(
+                    Modifier.clip(RoundedCornerShape(10.dp)).background(c.accent)
+                        .clickable { selecting = false; selected = emptySet() }
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        "完成",
+                        color = if (c.isDark) Color(0xFF141008) else Color(0xFFFAF8F4),
                         fontSize = 12.sp, fontWeight = FontWeight.SemiBold
                     )
                 }
