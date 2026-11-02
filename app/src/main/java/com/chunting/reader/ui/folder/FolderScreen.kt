@@ -214,6 +214,7 @@ private fun FolderScreenPortrait(vm: AppViewModel, onBack: () -> Unit) {
                         if (d > 0) PlayerController.seekTo((p * d).toLong())
                     },
                     onSelectSpeed = { vm.setSpeed(it) },
+                    folderPath = folder?.path ?: ct.folderPath,
                 )
 
                 h != null -> ResumeBar(

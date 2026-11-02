@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
@@ -32,7 +33,12 @@ fun LandscapeCanvas(content: @Composable BoxScope.() -> Unit) {
         CompositionLocalProvider(
             LocalDensity provides Density(base.density * scale, base.fontScale)
         ) {
-            Box(Modifier.fillMaxSize(), content = content)
+            // 横屏三键/手势导航条常压在底部操作条上（车机无导航条时 inset 为 0，不影响布局），
+            // 统一让出系统导航区，避免播放条、多选条、上拉菜单被遮住。
+            Box(
+                Modifier.fillMaxSize().navigationBarsPadding(),
+                content = content
+            )
         }
     }
 }

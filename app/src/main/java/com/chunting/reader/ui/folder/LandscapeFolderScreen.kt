@@ -1,4 +1,4 @@
-package com.chunting.reader.ui.folder
+﻿package com.chunting.reader.ui.folder
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -33,8 +33,6 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -51,8 +49,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -63,7 +64,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.chunting.reader.player.PlayerController
 import com.chunting.reader.ui.AppViewModel
+import com.chunting.reader.ui.common.AnchoredMenu
+import com.chunting.reader.ui.common.AnchoredMenuItem
 import com.chunting.reader.ui.common.AppRail
+import com.chunting.reader.ui.common.FolderCover
 import com.chunting.reader.ui.common.GeneratedCover
 import com.chunting.reader.ui.theme.LocalAppColors
 import com.chunting.reader.ui.theme.ShelfLayout
@@ -216,6 +220,7 @@ fun FolderScreenLandscape(vm: AppViewModel, onBack: () -> Unit) {
                         diameter = d,
                         rotation = rotation,
                         label = discLabel,
+                        folderPath = folderPath,
                     )
                 }
 
@@ -295,10 +300,26 @@ fun FolderScreenLandscape(vm: AppViewModel, onBack: () -> Unit) {
                 }
 
                 Spacer(Modifier.height(16.dp))
+                // 横屏：页码挪到左边，倍速挪到右边，定时关闭落在中间（原红圈处）
                 Row(
                     Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    Text(
+                        if (idxNow >= 0) "${idxNow + 1} / ${tracks.size}" else "- / ${tracks.size}",
+                        color = c.sub, fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold,
+                        maxLines = 1
+                    )
+                    Spacer(Modifier.weight(1f))
+                    SleepTimerPill(
+                        accent = c.accent,
+                        textColor = c.text,
+                        subColor = c.sub,
+                        line = c.line,
+                        cardBg = c.card,
+                        enabled = true,
+                    )
+                    Spacer(Modifier.width(10.dp))
                     SpeedPill(
                         speed = speed,
                         accent = c.accent,
@@ -308,12 +329,6 @@ fun FolderScreenLandscape(vm: AppViewModel, onBack: () -> Unit) {
                         cardBg = c.card,
                         enabled = hasPlayable,
                         onSelect = { vm.setSpeed(it) },
-                    )
-                    Spacer(Modifier.weight(1f))
-                    Text(
-                        if (idxNow >= 0) "${idxNow + 1} / ${tracks.size}" else "- / ${tracks.size}",
-                        color = c.sub, fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold,
-                        maxLines = 1
                     )
                 }
             }
@@ -327,7 +342,8 @@ fun FolderScreenLandscape(vm: AppViewModel, onBack: () -> Unit) {
                         .padding(start = 20.dp, end = 20.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    GeneratedCover(
+                    FolderCover(
+                        folderPath,
                         discLabel,
                         Modifier.width(28.dp).height(42.dp),
                         fontSize = 14,
@@ -381,7 +397,7 @@ fun FolderScreenLandscape(vm: AppViewModel, onBack: () -> Unit) {
  * 黑胶唱片：外层纹路盘随播放旋转，中心封面固定不转，中间留一个轴孔。
  */
 @Composable
-private fun VinylDisc(diameter: Dp, rotation: Float, label: String) {
+private fun VinylDisc(diameter: Dp, rotation: Float, label: String, folderPath: String = "") {
     val c = LocalAppColors.current
     val disc = if (c.isDark) Color(0xFF14120E) else Color(0xFF1E1B16)
     val groove = if (c.isDark) Color(0xFF3B352A) else Color(0xFF3E382C)
@@ -414,7 +430,8 @@ private fun VinylDisc(diameter: Dp, rotation: Float, label: String) {
         }
         // 中心圆形封面（不随盘旋转，文字始终正着）
         Box(Modifier.size(diameter * 0.5f).clip(CircleShape)) {
-            GeneratedCover(
+            FolderCover(
+                folderPath,
                 label.ifEmpty { "听" },
                 Modifier.fillMaxSize(),
                 fontSize = 30,
@@ -451,7 +468,7 @@ private fun LSkipChip(
     }
 }
 
-/** 倍速胶囊 + 下拉选档 */
+/** 倍速胶囊 + 上拉选档（高度限制在屏幕内，选项等分，避免横屏溢出） */
 @Composable
 private fun SpeedPill(
     speed: Float,
@@ -464,7 +481,8 @@ private fun SpeedPill(
     onSelect: (Float) -> Unit,
 ) {
     var open by remember { mutableStateOf(false) }
-    Box {
+    var anchor by remember { mutableStateOf<Rect?>(null) }
+    Box(Modifier.onGloballyPositioned { anchor = it.boundsInWindow() }) {
         Row(
             Modifier.clip(RoundedCornerShape(50))
                 .background(if (open) accent.copy(alpha = 0.18f) else line)
@@ -483,33 +501,34 @@ private fun SpeedPill(
                 modifier = Modifier.size(16.dp)
             )
         }
-        DropdownMenu(
+        AnchoredMenu(
             expanded = open,
             onDismissRequest = { open = false },
-            containerColor = cardBg,
+            anchorBounds = anchor,
+            itemCount = PLAYER_SPEEDS.size,
+            cardColor = cardBg,
+            borderColor = line,
+            width = 132.dp,
+            itemHeight = 32.dp,
         ) {
             PLAYER_SPEEDS.forEach { v ->
                 val sel = abs(v - speed) < 0.01f
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            speedLabel(v),
-                            color = if (sel) accent else textColor,
-                            fontSize = 12.sp,
-                            fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal
-                        )
-                    },
-                    trailingIcon = {
-                        if (sel) Icon(
-                            Icons.Filled.Check, null,
-                            tint = accent, modifier = Modifier.size(14.dp)
-                        )
-                    },
-                    onClick = {
-                        open = false
-                        if (!sel) onSelect(v)
-                    },
-                )
+                AnchoredMenuItem(onClick = {
+                    open = false
+                    if (!sel) onSelect(v)
+                }) {
+                    Text(
+                        speedLabel(v),
+                        color = if (sel) accent else textColor,
+                        fontSize = 12.sp,
+                        fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal
+                    )
+                    Spacer(Modifier.weight(1f))
+                    if (sel) Icon(
+                        Icons.Filled.Check, null,
+                        tint = accent, modifier = Modifier.size(13.dp)
+                    )
+                }
             }
         }
     }

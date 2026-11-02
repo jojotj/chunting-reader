@@ -1,4 +1,4 @@
-package com.chunting.reader.ui.shelf
+﻿package com.chunting.reader.ui.shelf
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -58,7 +58,10 @@ import com.chunting.reader.player.PlayerController
 import com.chunting.reader.ui.AppViewModel
 import com.chunting.reader.ui.common.AppRail
 import com.chunting.reader.ui.common.DotLine
+import com.chunting.reader.ui.common.CoverReplacePill
+import com.chunting.reader.ui.common.FolderCover
 import com.chunting.reader.ui.common.GeneratedCover
+import com.chunting.reader.ui.common.rememberCoverReplaceLauncher
 import com.chunting.reader.ui.folder.TrackRow
 import com.chunting.reader.ui.theme.LocalAppColors
 import com.chunting.reader.ui.theme.ShelfLayout
@@ -183,6 +186,7 @@ fun ShelfScreenLandscape(
                 if (current != null && !selecting) {
                     ShelfPlayerBar(
                         trackName = current!!.fileName,
+                        folderPath = current!!.folderPath,
                         folderName = folderName,
                         playing = playing,
                         positionMs = position,
@@ -246,8 +250,18 @@ fun ShelfScreenLandscape(
                             )
                         }
                         Spacer(Modifier.weight(1f))
-                        Text("已选 ${selected.size} / ${folders.size}", color = c.sub, fontSize = 10.sp)
+                        Text("${selected.size}/${folders.size}", color = c.sub, fontSize = 10.sp)
                         Spacer(Modifier.weight(1f))
+                        // 封面替换：单选才亮，多选置灰（位置在全选与删除之间）
+                        val pickCover = rememberCoverReplaceLauncher()
+                        CoverReplacePill(
+                            enabled = selected.size == 1,
+                            accent = c.accent,
+                            line = c.line,
+                            subColor = c.sub,
+                            onClick = { selected.firstOrNull()?.let(pickCover) }
+                        )
+                        Spacer(Modifier.width(8.dp))
                         Box(
                             Modifier.clip(RoundedCornerShape(10.dp))
                                 .background(if (selected.isEmpty()) c.line else Color(0xFFD9534F))
@@ -381,7 +395,8 @@ private fun BookCellLandscape(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(Modifier.fillMaxWidth()) {
-            GeneratedCover(
+            FolderCover(
+                folderPath = f.path,
                 folderName = f.name,
                 // v6 s1：横屏陈列的封面只占单元格宽的 36%，两行才装得下且不显臃肿
                 modifier = Modifier.align(Alignment.Center).fillMaxWidth(0.36f).aspectRatio(2f / 3f),
@@ -500,7 +515,8 @@ private fun ShelfSplitLandscape(
                     Modifier.fillMaxWidth().height(64.dp).padding(start = 20.dp, end = 20.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    GeneratedCover(
+                    FolderCover(
+                        picked.path,
                         picked.name,
                         Modifier.width(30.dp).height(42.dp),
                         fontSize = 15,
@@ -570,7 +586,8 @@ private fun BookRowLandscape(
                 .padding(horizontal = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            GeneratedCover(
+            FolderCover(
+                f.path,
                 f.name,
                 Modifier.width(34.dp).height(48.dp),
                 fontSize = 16,
@@ -625,6 +642,7 @@ private fun BookRowLandscape(
 @Composable
 private fun ShelfPlayerBar(
     trackName: String,
+    folderPath: String = "",
     folderName: String,
     playing: Boolean,
     positionMs: Long,
@@ -646,7 +664,8 @@ private fun ShelfPlayerBar(
             .padding(horizontal = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        GeneratedCover(
+        FolderCover(
+            folderPath,
             folderName.ifEmpty { "听" },
             Modifier.width(32.dp).height(46.dp),
             fontSize = 15,

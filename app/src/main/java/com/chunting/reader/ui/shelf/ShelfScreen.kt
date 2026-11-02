@@ -1,4 +1,4 @@
-package com.chunting.reader.ui.shelf
+﻿package com.chunting.reader.ui.shelf
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -68,7 +68,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.chunting.reader.data.model.ShelfFolder
 import com.chunting.reader.ui.AppViewModel
+import com.chunting.reader.ui.common.CoverReplacePill
+import com.chunting.reader.ui.common.FolderCover
 import com.chunting.reader.ui.common.GeneratedCover
+import com.chunting.reader.ui.common.rememberCoverReplaceLauncher
 import com.chunting.reader.ui.theme.LocalAppColors
 import com.chunting.reader.ui.theme.ShelfLayout
 import com.chunting.reader.ui.theme.ThemeMode
@@ -219,6 +222,16 @@ private fun ShelfScreenPortrait(
                 }
                 }
                 if (selecting) {
+                    // 封面替换：只有单选时可用，多选一律灰掉
+                    val pickCover = rememberCoverReplaceLauncher()
+                    CoverReplacePill(
+                        enabled = selected.size == 1,
+                        accent = c.accent,
+                        line = c.line,
+                        subColor = c.sub,
+                        onClick = { selected.firstOrNull()?.let(pickCover) }
+                    )
+                    Spacer(Modifier.width(8.dp))
                     Box(
                         Modifier.clip(RoundedCornerShape(9.dp)).background(c.accent)
                             .clickable { selecting = false; selected = emptySet() }
@@ -286,6 +299,7 @@ private fun ShelfScreenPortrait(
         // 迷你播放条（多选时让位给操作条）：保持圆角浮窗原貌，不加渐变/实心遮罩
         if (current != null && !selecting) {
             MiniPlayer(
+                folderPath = current!!.folderPath,
                 folderName = folders.firstOrNull { it.path == current!!.folderPath }?.name
                     ?: current!!.folderPath.substringAfterLast('/'),
                 fileName = current!!.fileName,
@@ -423,7 +437,8 @@ private fun ShelfGrid(
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 // v6 竖屏 s6：封面取单元格宽的 59%、2:3 比例，比老版整行铺满瘦一号
                 Box(Modifier.fillMaxWidth(0.59f).aspectRatio(2f / 3f)) {
-                    GeneratedCover(
+                    FolderCover(
+                        folderPath = f.path,
                         folderName = f.name,
                         modifier = Modifier.fillMaxSize(),
                         fontSize = 20,
@@ -497,7 +512,7 @@ private fun ShelfList(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box {
-                    GeneratedCover(f.name, Modifier.size(42.dp), fontSize = 17)
+                    FolderCover(f.path, f.name, Modifier.size(42.dp), fontSize = 17)
                     // 多选蒙层 + 中心复选框
                     if (selecting) {
                         val isSel = f.path in selected
@@ -568,6 +583,7 @@ private fun EmptyShelf(onAdd: () -> Unit) {
 
 @Composable
 fun MiniPlayer(
+    folderPath: String,
     folderName: String,
     fileName: String,
     playing: Boolean,
@@ -589,7 +605,7 @@ fun MiniPlayer(
             .padding(horizontal = 11.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        GeneratedCover(folderName, Modifier.size(34.dp), fontSize = 14, withSpine = false)
+        FolderCover(folderPath, folderName, Modifier.size(34.dp), fontSize = 14, withSpine = false)
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             Text(

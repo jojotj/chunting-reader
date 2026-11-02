@@ -28,8 +28,6 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.Replay30
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -42,9 +40,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -52,7 +53,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.chunting.reader.ui.common.GeneratedCover
+import com.chunting.reader.ui.common.AnchoredMenu
+import com.chunting.reader.ui.common.AnchoredMenuItem
+import com.chunting.reader.ui.common.FolderCover
 import com.chunting.reader.util.formatTime
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -101,10 +104,12 @@ fun PlayerBar(
     onSeek: (Float) -> Unit,
     onSelectSpeed: (Float) -> Unit,
     modifier: Modifier = Modifier,
+    folderPath: String = "",
 ) {
     var slider by remember { mutableFloatStateOf(0f) }
     var dragging by remember { mutableStateOf(false) }
     var speedMenu by remember { mutableStateOf(false) }
+    var speedAnchor by remember { mutableStateOf<Rect?>(null) }
 
     LaunchedEffect(positionMs, durationMs, dragging) {
         if (!dragging && durationMs > 0) {
@@ -126,23 +131,41 @@ fun PlayerBar(
             .pointerInput(Unit) { detectTapGestures { } }
             .padding(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 12.dp)
     ) {
-        // 第一段：文件名 / 时间 / 倍速（信息行）
+        // 第一段：文件名（最多 2 行） / 时间 / 定时关闭 / 倍速
         Row(verticalAlignment = Alignment.CenterVertically) {
-            GeneratedCover(folderName.ifEmpty { "听" }, Modifier.size(40.dp), fontSize = 16, withSpine = false)
+            FolderCover(
+                folderPath = folderPath,
+                folderName = folderName.ifEmpty { "听" },
+                modifier = Modifier.size(40.dp),
+                fontSize = 16,
+                withSpine = false,
+            )
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
                 Text(
                     fileName, color = textColor, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis
+                    // 长音频名改两行，字号不动；再长才省略
+                    maxLines = 2, minLines = 1, lineHeight = 16.sp,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     "${formatTime(positionMs)} / ${formatTime(durationMs)}",
                     color = subColor, fontSize = 10.sp, modifier = Modifier.padding(top = 2.dp)
                 )
             }
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(6.dp))
+            // 定时关闭：跟倍速同一套胶囊 + 上拉菜单
+            SleepTimerPill(
+                accent = accent,
+                textColor = textColor,
+                subColor = subColor,
+                line = line,
+                cardBg = cardBg,
+                compact = true,
+            )
+            Spacer(Modifier.width(6.dp))
             // 倍速：点一次弹出上拉菜单，直接选档
-            Box {
+            Box(Modifier.onGloballyPositioned { speedAnchor = it.boundsInWindow() }) {
                 Row(
                     Modifier.clip(RoundedCornerShape(50))
                         .background(if (speedMenu) accent.copy(alpha = 0.18f) else line)
@@ -161,33 +184,34 @@ fun PlayerBar(
                         modifier = Modifier.size(16.dp)
                     )
                 }
-                DropdownMenu(
+                AnchoredMenu(
                     expanded = speedMenu,
                     onDismissRequest = { speedMenu = false },
-                    containerColor = cardBg,
+                    anchorBounds = speedAnchor,
+                    itemCount = PLAYER_SPEEDS.size,
+                    cardColor = cardBg,
+                    borderColor = line,
+                    width = 132.dp,
+                    itemHeight = 34.dp,
                 ) {
                     PLAYER_SPEEDS.forEach { v ->
                         val sel = abs(v - speed) < 0.01f
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    speedLabel(v),
-                                    color = if (sel) accent else textColor,
-                                    fontSize = 12.sp,
-                                    fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal
-                                )
-                            },
-                            trailingIcon = {
-                                if (sel) Icon(
-                                    Icons.Filled.Check, null,
-                                    tint = accent, modifier = Modifier.size(14.dp)
-                                )
-                            },
-                            onClick = {
-                                speedMenu = false
-                                if (!sel) onSelectSpeed(v)
-                            },
-                        )
+                        AnchoredMenuItem(onClick = {
+                            speedMenu = false
+                            if (!sel) onSelectSpeed(v)
+                        }) {
+                            Text(
+                                speedLabel(v),
+                                color = if (sel) accent else textColor,
+                                fontSize = 12.sp,
+                                fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal
+                            )
+                            Spacer(Modifier.weight(1f))
+                            if (sel) Icon(
+                                Icons.Filled.Check, null,
+                                tint = accent, modifier = Modifier.size(13.dp)
+                            )
+                        }
                     }
                 }
             }

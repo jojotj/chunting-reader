@@ -1,0 +1,143 @@
+package com.chunting.reader.ui.common
+
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.chunting.reader.ui.theme.LocalAppColors
+import com.chunting.reader.util.CoverStore
+import com.chunting.reader.util.monogram
+
+/**
+ * 文件夹封面：用户换过图就显示照片，否则回落到原来的生成式封面。
+ * 两者共用同一套书脊、圆角、阴影参数，换图后视觉不掉层。
+ */
+@Composable
+fun FolderCover(
+    folderPath: String,
+    folderName: String,
+    modifier: Modifier = Modifier,
+    fontSize: Int = 32,
+    showHint: Boolean = false,
+    cornerRadius: Dp = 6.dp,
+    withSpine: Boolean = true,
+) {
+    val ctx = LocalContext.current
+    val version by CoverStore.version.collectAsState()
+    val bitmap = remember(folderPath, version) {
+        if (folderPath.isEmpty()) null else CoverStore.load(ctx, folderPath)
+    }
+    val bmp = bitmap
+    if (bmp == null) {
+        GeneratedCover(folderName, modifier, fontSize, showHint, cornerRadius, withSpine)
+    } else {
+        PhotoCover(
+            bitmap = bmp,
+            folderName = folderName,
+            modifier = modifier,
+            fontSize = fontSize,
+            cornerRadius = cornerRadius,
+            withSpine = withSpine,
+        )
+    }
+}
+
+/**
+ * 照片封面：圆角/书脊/阴影与 GeneratedCover 完全一致，另加顶部高光和底部暗角，
+ * 保证左上标题区、底部首字在任何照片上都读得清。
+ */
+@Composable
+private fun PhotoCover(
+    bitmap: android.graphics.Bitmap,
+    folderName: String,
+    modifier: Modifier,
+    fontSize: Int,
+    cornerRadius: Dp,
+    withSpine: Boolean,
+) {
+    val colors = LocalAppColors.current
+    val outer = RoundedCornerShape(cornerRadius)
+    val inner = RoundedCornerShape(
+        topStart = 2.dp, topEnd = cornerRadius, bottomEnd = cornerRadius, bottomStart = 2.dp
+    )
+    Box(
+        modifier
+            .shadow(if (colors.isDark) 8.dp else 4.dp, outer)
+            .clip(inner)
+            .background(Color(0xFF1C1913))
+    ) {
+        Image(
+            bitmap = bitmap.asImageBitmap(),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize(),
+        )
+        // 顶部高光（与宣传卡片同款，弱到几乎不可见，只负责提质感）
+        Box(
+            Modifier.fillMaxSize().background(
+                Brush.verticalGradient(
+                    0f to Color.White.copy(alpha = 0.16f),
+                    0.42f to Color.Transparent
+                )
+            )
+        )
+        // 底部暗角：压住照片杂乱区域，给首字和标题留出可读底
+        Box(
+            Modifier.fillMaxSize().background(
+                Brush.verticalGradient(
+                    0.52f to Color.Transparent,
+                    1f to Color.Black.copy(alpha = 0.66f)
+                )
+            )
+        )
+        // 书脊暗边（与生成式封面同一条渐变）
+        if (withSpine) {
+            Box(
+                Modifier.fillMaxSize().background(
+                    Brush.horizontalGradient(
+                        0f to Color.Black.copy(alpha = 0.55f),
+                        0.16f to Color.White.copy(alpha = 0.10f),
+                        0.3f to Color.Transparent
+                    )
+                )
+            )
+        }
+        // 首字徽章：照片上不再居中压大块字，落到左下角，安静但可辨认
+        Text(
+            text = monogram(folderName),
+            color = Color.White.copy(alpha = 0.94f),
+            fontSize = (fontSize * 0.56f).coerceAtLeast(7f).sp,
+            fontWeight = FontWeight.Medium,
+            fontFamily = FontFamily.Serif,
+            modifier = Modifier.align(Alignment.BottomStart).padding(start = 6.dp, bottom = 3.dp)
+        )
+        // 1px 细白边，暗色照片不会糊进背景
+        Box(
+            Modifier.fillMaxSize().border(
+                0.9.dp, Color.White.copy(alpha = if (colors.isDark) 0.16f else 0.26f), inner
+            )
+        )
+    }
+}

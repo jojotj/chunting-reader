@@ -2,6 +2,7 @@ package com.chunting.reader.player
 
 import android.content.ComponentName
 import android.content.Context
+import android.os.SystemClock
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
@@ -10,9 +11,15 @@ import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.chunting.reader.data.model.AudioTrack
 import com.google.common.util.concurrent.MoreExecutors
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
 /**
  * 播放控制单例。UI 通过它连接 PlaybackService。
@@ -40,6 +47,13 @@ object PlayerController {
 
     private val _speed = MutableStateFlow(1.0f)
     val speed: StateFlow<Float> = _speed.asStateFlow()
+
+    /** 定时关闭剩余毫秒，0 表示未设定 */
+    private val _sleepRemainMs = MutableStateFlow(0L)
+    val sleepRemainMs: StateFlow<Long> = _sleepRemainMs.asStateFlow()
+
+    private val timerScope = CoroutineScope(Dispatchers.Main.immediate + SupervisorJob())
+    private var sleepJob: Job? = null
 
     private var skipSeconds = 30
 
@@ -194,6 +208,38 @@ object PlayerController {
         val c = controller ?: return
         runCatching { c.setPlaybackSpeed(v) }
         _speed.value = c.playbackParameters?.speed ?: v
+    }
+
+    /**
+     * 设定定时关闭：到点自动暂停（不关 App、不停服务，醒来点一下就能继续）。
+     * 与倍速一样是「全局一次设定」，再次调用即覆盖。
+     */
+    fun setSleepTimer(minutes: Int) {
+        sleepJob?.cancel()
+        sleepJob = null
+        if (minutes <= 0) {
+            _sleepRemainMs.value = 0L
+            return
+        }
+        val total = minutes.toLong() * 60_000L
+        _sleepRemainMs.value = total
+        sleepJob = timerScope.launch {
+            val endAt = SystemClock.elapsedRealtime() + total
+            while (true) {
+                val remain = endAt - SystemClock.elapsedRealtime()
+                if (remain <= 0L) break
+                _sleepRemainMs.value = remain
+                delay(if (remain > 3_000L) 1_000L else 200L)
+            }
+            _sleepRemainMs.value = 0L
+            runCatching { controller?.pause() }
+        }
+    }
+
+    fun cancelSleepTimer() {
+        sleepJob?.cancel()
+        sleepJob = null
+        _sleepRemainMs.value = 0L
     }
 
     fun refreshPosition() {
