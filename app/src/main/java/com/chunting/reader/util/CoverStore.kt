@@ -1,4 +1,4 @@
-﻿package com.chunting.reader.util
+package com.chunting.reader.util
 
 import android.content.Context
 import android.graphics.Bitmap
@@ -65,7 +65,8 @@ object CoverStore {
             inSampleSize = 2
             inPreferredConfig = Bitmap.Config.RGB_565
         }
-        val bmp = runCatching { BitmapFactory.decodeFile(f.absolutePath, opts) }.getOrNull() ?: return null
+        val bmp = runCatching { BitmapFactory.decodeFile(f.absolutePath, opts) }.getOrNull()
+        if (bmp == null) return null
         synchronized(cache) { cache[k] = bmp }
         return bmp
     }

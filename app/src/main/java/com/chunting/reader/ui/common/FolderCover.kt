@@ -5,14 +5,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.collectAsState
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
@@ -21,14 +18,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.chunting.reader.ui.theme.LocalAppColors
 import com.chunting.reader.util.CoverStore
-import com.chunting.reader.util.monogram
 
 /**
  * 文件夹封面：用户换过图就显示照片，否则回落到原来的生成式封面。
@@ -51,13 +44,12 @@ fun FolderCover(
     }
     val bmp = bitmap
     if (bmp == null) {
+        // 生成式封面：配色与首字都由文件夹名哈希产生，还原后自动补回这个字
         GeneratedCover(folderName, modifier, fontSize, showHint, cornerRadius, withSpine)
     } else {
         PhotoCover(
             bitmap = bmp,
-            folderName = folderName,
             modifier = modifier,
-            fontSize = fontSize,
             cornerRadius = cornerRadius,
             withSpine = withSpine,
         )
@@ -65,15 +57,13 @@ fun FolderCover(
 }
 
 /**
- * 照片封面：圆角/书脊/阴影与 GeneratedCover 完全一致，另加顶部高光和底部暗角，
- * 保证左上标题区、底部首字在任何照片上都读得清。
+ * 照片封面：圆角/书脊/阴影与 GeneratedCover 完全一致，只加一层极弱的顶部高光提质感。
+ * 照片上不叠任何文字（专辑图本身常带标题），只在还原成生成式封面时才重新显示首字。
  */
 @Composable
 private fun PhotoCover(
     bitmap: android.graphics.Bitmap,
-    folderName: String,
     modifier: Modifier,
-    fontSize: Int,
     cornerRadius: Dp,
     withSpine: Boolean,
 ) {
@@ -103,15 +93,6 @@ private fun PhotoCover(
                 )
             )
         )
-        // 底部暗角：压住照片杂乱区域，给首字和标题留出可读底
-        Box(
-            Modifier.fillMaxSize().background(
-                Brush.verticalGradient(
-                    0.52f to Color.Transparent,
-                    1f to Color.Black.copy(alpha = 0.66f)
-                )
-            )
-        )
         // 书脊暗边（与生成式封面同一条渐变）
         if (withSpine) {
             Box(
@@ -124,15 +105,6 @@ private fun PhotoCover(
                 )
             )
         }
-        // 首字徽章：照片上不再居中压大块字，落到左下角，安静但可辨认
-        Text(
-            text = monogram(folderName),
-            color = Color.White.copy(alpha = 0.94f),
-            fontSize = (fontSize * 0.56f).coerceAtLeast(7f).sp,
-            fontWeight = FontWeight.Medium,
-            fontFamily = FontFamily.Serif,
-            modifier = Modifier.align(Alignment.BottomStart).padding(start = 6.dp, bottom = 3.dp)
-        )
         // 1px 细白边，暗色照片不会糊进背景
         Box(
             Modifier.fillMaxSize().border(
