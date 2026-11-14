@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -23,13 +25,20 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.chunting.reader.ui.AppViewModel
@@ -141,6 +150,22 @@ fun SettingsScreen(vm: AppViewModel, onBack: () -> Unit = {}) {
                 SegChip("关", !s.autoNext, c) { vm.setAutoNext(false) }
             }
         }
+        SkipRow(
+            title = "跳过开头",
+            sub = "每集开始后自动跳过设定的秒数",
+            on = s.headSkipEnabled,
+            seconds = s.headSkipSeconds,
+            onToggle = { vm.setHeadSkipEnabled(it) },
+            onSeconds = { vm.setHeadSkipSeconds(it) },
+        )
+        SkipRow(
+            title = "跳过结尾",
+            sub = "临近结尾自动跳过，直接结束本集",
+            on = s.tailSkipEnabled,
+            seconds = s.tailSkipSeconds,
+            onToggle = { vm.setTailSkipEnabled(it) },
+            onSeconds = { vm.setTailSkipSeconds(it) },
+        )
 
         SectionTitle("关于")
         Text(
@@ -193,6 +218,79 @@ private fun SegChip(label: String, on: Boolean, c: com.chunting.reader.ui.theme.
             fontSize = 10.5.sp,
             fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal
         )
+    }
+}
+
+/**
+ * 片头 / 片尾跳过的一行：右侧开关，下方是秒数输入框 + 常用档位。
+ * 秒数支持手动输入（0–600），输入即时生效并存盘。
+ */
+@Composable
+private fun SkipRow(
+    title: String,
+    sub: String,
+    on: Boolean,
+    seconds: Int,
+    onToggle: (Boolean) -> Unit,
+    onSeconds: (Int) -> Unit,
+) {
+    val c = LocalAppColors.current
+    var text by remember { mutableStateOf(seconds.toString()) }
+    // 外部（快捷档位 / 重新进入页面）改动秒数时同步到输入框
+    LaunchedEffect(seconds) {
+        if (text.toIntOrNull() != seconds) text = seconds.toString()
+    }
+    Column(Modifier.fillMaxWidth().padding(vertical = 10.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(title, color = c.text, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                Text(sub, color = c.sub, fontSize = 9.5.sp, modifier = Modifier.padding(top = 2.dp))
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                SegChip("开", on, c) { onToggle(true) }
+                SegChip("关", !on, c) { onToggle(false) }
+            }
+        }
+        Row(
+            Modifier.fillMaxWidth().padding(top = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                Modifier.width(58.dp).height(30.dp).clip(RoundedCornerShape(8.dp))
+                    .background(c.line)
+                    .then(
+                        if (on) Modifier.border(1.dp, c.accent, RoundedCornerShape(8.dp)) else Modifier
+                    )
+                    .padding(horizontal = 8.dp),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                BasicTextField(
+                    value = text,
+                    onValueChange = { v ->
+                        val digits = v.filter { it.isDigit() }.take(3)
+                        text = digits
+                        digits.toIntOrNull()?.let { onSeconds(it.coerceIn(0, 600)) }
+                    },
+                    singleLine = true,
+                    textStyle = TextStyle(fontSize = 11.5.sp, color = if (on) c.text else c.sub),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    cursorBrush = SolidColor(c.accent),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            Spacer(Modifier.width(5.dp))
+            Text("秒", color = c.sub, fontSize = 10.5.sp)
+            Spacer(Modifier.weight(1f))
+            Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                listOf(10, 30, 60, 120).forEach { v ->
+                    SegChip("$v", seconds == v, c) {
+                        onSeconds(v)
+                        text = v.toString()
+                    }
+                }
+            }
+        }
+        Box(Modifier.fillMaxWidth().height(1.dp).background(c.line).padding(top = 10.dp))
     }
 }
 

@@ -139,6 +139,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             settingsFlow.collect { s ->
                 PlayerController.setSkipSeconds(s.skipSeconds)
+                PlayerController.setAutoSkip(
+                    headSeconds = if (s.headSkipEnabled) s.headSkipSeconds else 0,
+                    tailSeconds = if (s.tailSkipEnabled) s.tailSkipSeconds else 0,
+                    autoNext = s.autoNext,
+                )
             }
         }
         // 进度缓存：单曲点击时据此判断是否从上次位置续播
@@ -561,4 +566,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun setDefaultSpeed(v: Float) = viewModelScope.launch { settings.setDefaultSpeed(v) }
     fun setRememberSpeed(b: Boolean) = viewModelScope.launch { settings.setRememberSpeed(b) }
     fun setAutoNext(b: Boolean) = viewModelScope.launch { settings.setAutoNext(b) }
+    fun setHeadSkipEnabled(b: Boolean) = viewModelScope.launch { settings.setHeadSkipEnabled(b) }
+    fun setHeadSkipSeconds(s: Int) = viewModelScope.launch { settings.setHeadSkipSeconds(s) }
+    fun setTailSkipEnabled(b: Boolean) = viewModelScope.launch { settings.setTailSkipEnabled(b) }
+    fun setTailSkipSeconds(s: Int) = viewModelScope.launch { settings.setTailSkipSeconds(s) }
 }

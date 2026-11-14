@@ -57,6 +57,21 @@ object PlayerController {
 
     private var skipSeconds = 30
 
+    /* ---------- 片头 / 片尾自动跳过（全局设置，对所有音频生效） ---------- */
+
+    /** 关闭的开关以 0 表示 */
+    private var headSkipSec = 0
+    private var tailSkipSec = 0
+    private var autoNextEnabled = true
+
+    /** 曲目刚切换时待执行的开头跳过目标位置（0 表示无挂起） */
+    private var pendingHeadTargetMs = 0L
+
+    /** 本次播放请求的起播位置，避免「开头跳过」把续播位置顶掉 */
+    private var resumeFloorMs = 0L
+
+    private var edgeJob: Job? = null
+
     /** 当前播放队列，用于把 mediaItem 还原成完整 AudioTrack（含真实路径） */
     private var queue: List<AudioTrack> = emptyList()
 
@@ -107,6 +122,16 @@ object PlayerController {
             }
             resumePath = null
             _positionMs.value = (controller?.currentPosition ?: 0L).coerceAtLeast(0L)
+            // 开头跳过：进入新曲目后跳到设定秒数（不会低于续播起点）
+            val headMs = if (headSkipSec > 0) headSkipSec * 1000L else 0L
+            val target = maxOf(headMs, resumeFloorMs)
+            resumeFloorMs = 0L
+            pendingHeadTargetMs = target
+            if (target > 0L) {
+                runCatching {
+                    if ((controller?.currentPosition ?: 0L) < target) controller?.seekTo(target)
+                }
+            }
             val idx = controller?.currentMediaItemIndex ?: -1
             val fromQueue = queue.getOrNull(idx)
             _currentTrack.value = fromQueue ?: AudioTrack(
@@ -137,7 +162,63 @@ object PlayerController {
                 pendingPlay = null
                 if (controller != null) act()
             }
+            startEdgeWatcher()
         }, MoreExecutors.directExecutor())
+    }
+
+    /* ---------- 片头 / 片尾自动跳过 ---------- */
+
+    /**
+     * 设置全局片头/片尾跳过。
+     * @param headSeconds 开头跳过秒数，0 表示不跳过
+     * @param tailSeconds 结尾跳过秒数，0 表示不跳过
+     * @param autoNext 播放结束自动下一曲；关掉后结尾跳过只停在结尾，不切下一集
+     */
+    fun setAutoSkip(headSeconds: Int, tailSeconds: Int, autoNext: Boolean) {
+        headSkipSec = headSeconds.coerceIn(0, 600)
+        tailSkipSec = tailSeconds.coerceIn(0, 600)
+        autoNextEnabled = autoNext
+        startEdgeWatcher()
+    }
+
+    /** 常驻轻量巡检：补齐片头跳过的时序落差，并负责片尾到点处理 */
+    private fun startEdgeWatcher() {
+        if (edgeJob != null) return
+        edgeJob = timerScope.launch {
+            while (true) {
+                delay(250)
+                runCatching { checkEdges() }
+            }
+        }
+    }
+
+    private fun checkEdges() {
+        val c = controller ?: return
+        val pos = c.currentPosition
+        val dur = c.duration
+
+        // 片头：切曲瞬间位置读数可能是 0，这里补跳一次（只跳一次，之后用户手动回退不干扰）
+        if (pendingHeadTargetMs > 0L) {
+            if (pos >= pendingHeadTargetMs) {
+                pendingHeadTargetMs = 0L
+            } else if (c.isPlaying) {
+                c.seekTo(pendingHeadTargetMs)
+                pendingHeadTargetMs = 0L
+            }
+        }
+
+        // 片尾：临近结尾直接结束本集
+        if (tailSkipSec <= 0 || dur <= 0L || !c.isPlaying) return
+        // 音频太短、头尾跳过会重叠时不处理，避免瞬间连跳
+        if (headSkipSec + tailSkipSec >= (dur / 1000L)) return
+        if (pos >= dur - tailSkipSec * 1000L) {
+            if (autoNextEnabled && c.hasNextMediaItem()) {
+                c.seekToNextMediaItem()
+            } else {
+                c.seekTo(dur)
+                c.pause()
+            }
+        }
     }
 
     fun release() {
@@ -164,6 +245,8 @@ object PlayerController {
         queue = tracks
         resumePath = null
         resumePosMs = 0L
+        // 续播起点优先于片头跳过：从上次位置接着听，不会被弹回开头
+        resumeFloorMs = startPositionMs.coerceAtLeast(0L)
         val items = tracks.map { t ->
             MediaItem.Builder()
                 .setMediaId(t.mediaId.toString())

@@ -22,6 +22,12 @@ data class Settings(
     val rememberSpeedPerFolder: Boolean = true,
     val autoNext: Boolean = true,
     val accentIndex: Int = 0,
+    /** 开头跳过：开关 + 秒数（全局，对所有音频生效） */
+    val headSkipEnabled: Boolean = false,
+    val headSkipSeconds: Int = 30,
+    /** 结尾跳过：开关 + 秒数（全局，对所有音频生效） */
+    val tailSkipEnabled: Boolean = false,
+    val tailSkipSeconds: Int = 30,
 )
 
 class SettingsStore(private val ctx: Context) {
@@ -39,6 +45,10 @@ class SettingsStore(private val ctx: Context) {
             rememberSpeedPerFolder = p[KEY_REMEMBER] ?: true,
             autoNext = p[KEY_AUTONEXT] ?: true,
             accentIndex = (p[KEY_ACCENT] ?: 0).coerceIn(0, 5),
+            headSkipEnabled = p[KEY_HEAD_ON] ?: false,
+            headSkipSeconds = (p[KEY_HEAD_SEC] ?: 30).coerceIn(0, 600),
+            tailSkipEnabled = p[KEY_TAIL_ON] ?: false,
+            tailSkipSeconds = (p[KEY_TAIL_SEC] ?: 30).coerceIn(0, 600),
         )
     }
 
@@ -49,6 +59,10 @@ class SettingsStore(private val ctx: Context) {
     suspend fun setRememberSpeed(b: Boolean) = put { it[KEY_REMEMBER] = b }
     suspend fun setAutoNext(b: Boolean) = put { it[KEY_AUTONEXT] = b }
     suspend fun setAccent(i: Int) = put { it[KEY_ACCENT] = i.coerceIn(0, 5) }
+    suspend fun setHeadSkipEnabled(b: Boolean) = put { it[KEY_HEAD_ON] = b }
+    suspend fun setHeadSkipSeconds(s: Int) = put { it[KEY_HEAD_SEC] = s.coerceIn(0, 600) }
+    suspend fun setTailSkipEnabled(b: Boolean) = put { it[KEY_TAIL_ON] = b }
+    suspend fun setTailSkipSeconds(s: Int) = put { it[KEY_TAIL_SEC] = s.coerceIn(0, 600) }
 
     private suspend fun put(block: (androidx.datastore.preferences.core.MutablePreferences) -> Unit) {
         ctx.dataStore.edit(block)
@@ -62,5 +76,9 @@ class SettingsStore(private val ctx: Context) {
         val KEY_REMEMBER = booleanPreferencesKey("remember_speed")
         val KEY_AUTONEXT = booleanPreferencesKey("auto_next")
         val KEY_ACCENT = intPreferencesKey("accent_index")
+        val KEY_HEAD_ON = booleanPreferencesKey("head_skip_on")
+        val KEY_HEAD_SEC = intPreferencesKey("head_skip_seconds")
+        val KEY_TAIL_ON = booleanPreferencesKey("tail_skip_on")
+        val KEY_TAIL_SEC = intPreferencesKey("tail_skip_seconds")
     }
 }
